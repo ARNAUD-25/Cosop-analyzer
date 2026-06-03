@@ -1,0 +1,10 @@
+streamlit>=1.58.0
+pypdf>=6.12.2
+pandas>=2.2.0
+plotly>=5.22.0
+openpyxl>=3.1.2
+requests>=2.31.0
+python-dotenv>=1.2.2
+numpy>=2.4.6
+rapidfuzz>=3.14.5
+openpyxl>=3.1.5

@@ -1,0 +1,17 @@
+# Environment
+.env
+.venv/
+
+# Cache
+.cosop_cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# OS
+.DS_Store
+Thumbs.db
