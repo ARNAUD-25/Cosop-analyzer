@@ -4,9 +4,19 @@ Interactive dashboard to extract and visualize IFAD partner organisations from C
 
 ## Screenshots
 
-![Home](screenshots/01_home.png)
-![Dashboard](screenshots/02_dashboard.png)
-![Detail](screenshots/03_detail.png)
+**Home**
+![Home](screenshots/Home.PNG)
+
+**Partners Dashboard**
+![Dashboard 1](screenshots/01_Partners.PNG)
+![Dashboard 2](screenshots/02_Partners.PNG)
+
+**Document Content**
+![Document Content](screenshots/Document_Content.PNG)
+
+**Summary**
+![Summary 1](screenshots/01_Summary.PNG)
+![Summary 2](screenshots/02_Summary.PNG)
 
 ## Installation
 
