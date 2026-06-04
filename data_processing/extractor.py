@@ -38,6 +38,7 @@ def _is_generic(name: str) -> bool:
     semantic_patterns = (
         "village-owned", "bum desa", "bumdes",
         "resident coordinator",
+        "business partners",
     )
 
     # Pattern: "X at national/local/regional level"
