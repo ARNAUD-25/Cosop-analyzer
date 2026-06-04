@@ -1,7 +1,6 @@
 import io
 import pypdf
 
-
 def read_pdf(uploaded_file) -> str:
     """
     Reads all pages of the PDF.

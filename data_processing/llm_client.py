@@ -33,8 +33,10 @@ PARTNERSHIP_KEYWORDS = [
 
 
 def _split_into_chunks(text: str) -> list[str]:
+    
     chunks = []
     start = 0
+    
     while start < len(text):
         end = start + CHUNK_SIZE
         if end < len(text):
@@ -45,25 +47,34 @@ def _split_into_chunks(text: str) -> list[str]:
         if chunk:
             chunks.append(chunk)
         start = end
+        
     return chunks
 
 
 def _post_mistral(messages: list[dict], api_key: str, max_tokens: int = 4000) -> str:
+    
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {"model": MISTRAL_MODEL, "messages": messages, "temperature": 0, "max_tokens": max_tokens}
+    
     for attempt in range(4):
+        
         r = requests.post(MISTRAL_URL, headers=headers, json=payload, timeout=60)
+        
         if r.status_code == 429:
             wait = 30 * (attempt + 1)
             print(f"  Rate limit -- waiting {wait}s (attempt {attempt+1}/4)")
             time.sleep(wait)
             continue
+        
         r.raise_for_status()
+        
         return r.json()["choices"][0]["message"]["content"]
+    
     raise Exception("Persistent rate limit after 4 attempts")
 
 
 def _call_mistral(chunk: str, i: int, total: int, api_key: str) -> list[dict]:
+    
     messages = [
         {
             "role": "system",
@@ -101,16 +112,22 @@ TEXT:
 {chunk}"""
         }
     ]
+    
     raw = _post_mistral(messages, api_key, max_tokens=4000)
     partners = parse_json_from_llm(raw)
+    
     print(f"  {len(partners)} partner(s) -- chunk {i}/{total}")
+    
     return partners
 
 
 def _normalize_names_with_llm(raw_names: list[str], api_key: str) -> dict[str, str]:
+    
     if not raw_names:
         return {}
+    
     names_list = "\n".join(f"- {n}" for n in raw_names)
+    
     messages = [
         {"role": "system", "content": "You are an expert in international development organisations. Respond with valid JSON only."},
         {"role": "user", "content": f"""Normalise these organisation names from an IFAD COSOP document.
@@ -131,35 +148,43 @@ Rules:
 NAMES:
 {names_list}"""}
     ]
+    
     try:
         raw = _post_mistral(messages, api_key, max_tokens=2000)
         raw = re.sub(r"```json\s*|```\s*", "", raw)
         m = re.search(r'\{.*\}', raw, re.DOTALL)
+        
         if m:
             parsed = json.loads(m.group())
             if isinstance(parsed, dict):
                 return {str(k).lower().strip(): str(v) for k, v in parsed.items() if isinstance(k, str) and isinstance(v, str)}
+            
     except Exception as e:
         print(f"  Normalisation error: {e}")
+        
     return {}
 
 
 def _normalize_key(name: str) -> str:
+    
     name = re.sub(r'\s*\([^)]*\)', '', name)
     name = re.sub(r'[^\w\s]', ' ', name)
     return re.sub(r'\s+', ' ', name).strip().lower()
 
 
 def _extract_acronym(name: str) -> str:
+    
     m = re.search(r'\(([A-Za-z]{2,8})\)', name)
     return m.group(1).upper() if m else ""
 
 
 def _enrich_evidence(partner: dict, full_text: str) -> list[str]:
+    
     """
     Searches the full document text for sentences mentioning this partner.
     Returns sentences exactly as they appear in the document.
     """
+    
     existing = [e for e in (partner.get("evidence") or []) if len(e.split()) >= 5]
     name = partner.get("name", "").strip().lower()
     aliases = [a.lower() for a in (partner.get("aliases") or []) if isinstance(a, str)]
@@ -187,29 +212,37 @@ def _enrich_evidence(partner: dict, full_text: str) -> list[str]:
 
 
 def _merge_partners(all_lists: list[list[dict]], name_mapping: dict[str, str]) -> list[dict]:
+    
     merged: dict[str, dict] = {}
     STATUS_PRIORITY = {"Active": 4, "Potential": 3, "Inactive": 2, "Unknown": 1}
 
     for partner_list in all_lists:
+        
         if not isinstance(partner_list, list):
             continue
+        
         for partner in partner_list:
+            
             if not isinstance(partner, dict):
                 continue
+            
             raw_name = partner.get("name", "")
             if not isinstance(raw_name, str) or not raw_name.strip():
                 continue
 
             canonical = name_mapping.get(raw_name.lower().strip())
+            
             if canonical:
                 partner["name"] = canonical
 
             key = _normalize_key(partner["name"])
+            
             if not key:
                 continue
 
             # Deduplication by acronym
             acronym = _extract_acronym(partner["name"])
+            
             if acronym:
                 for existing_key, existing_val in merged.items():
                     if _extract_acronym(existing_val.get("name", "")) == acronym:
@@ -218,6 +251,7 @@ def _merge_partners(all_lists: list[list[dict]], name_mapping: dict[str, str]) -
 
             # Fuzzy matching
             existing_keys = list(merged.keys())
+            
             if existing_keys:
                 result = process.extractOne(key, existing_keys, scorer=fuzz.token_sort_ratio)
                 if result and result[1] >= 85:
@@ -225,6 +259,7 @@ def _merge_partners(all_lists: list[list[dict]], name_mapping: dict[str, str]) -
 
             if key not in merged:
                 merged[key] = partner
+                
             else:
                 ex = merged[key]
                 if len(partner.get("name", "")) > len(ex.get("name", "")):
@@ -242,12 +277,15 @@ def _merge_partners(all_lists: list[list[dict]], name_mapping: dict[str, str]) -
 
 
 def ask_llm(document_text: str) -> list[dict]:
+    
     api_key = os.environ.get("API_KEY")
+    
     if not api_key:
         raise ValueError("API_KEY not found. Check your .env file.")
 
     chunks = _split_into_chunks(document_text)
     total = len(chunks)
+    
     print(f"Document split into {total} chunks of {CHUNK_SIZE} characters")
 
     all_results = []
@@ -271,6 +309,7 @@ def ask_llm(document_text: str) -> list[dict]:
     # Retry chunks that returned 0 partners
     if empty_chunks:
         print(f"Retrying {len(empty_chunks)} empty chunks...")
+        
         for i, chunk in empty_chunks:
             print(f"  Retrying chunk {i}/{total}...")
             try:
@@ -307,10 +346,13 @@ def ask_llm(document_text: str) -> list[dict]:
 
 
 def parse_json_from_llm(raw_text: str) -> list[dict]:
+    
     raw_text = re.sub(r"```json\s*|```\s*", "", raw_text)
     m = re.search(r'\[.*\]', raw_text, re.DOTALL)
+    
     if not m:
         return []
+    
     try:
         result = json.loads(m.group())
         if not isinstance(result, list):
@@ -330,6 +372,8 @@ def parse_json_from_llm(raw_text: str) -> list[dict]:
                     "description": "",
                     "evidence": []
                 })
+                
         return partners
+    
     except json.JSONDecodeError:
         return []

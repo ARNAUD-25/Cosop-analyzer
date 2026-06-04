@@ -52,6 +52,7 @@ def _is_generic(name: str) -> bool:
     # Starts with a general adjective that does not refer to a specific entity.
     if any(n.startswith(s) for s in generic_starts):
         return True
+    
     if any(name_no_parens.startswith(s) for s in generic_starts):
         return True
 
@@ -63,71 +64,95 @@ def _is_generic(name: str) -> bool:
 
 
 def _get_search_terms(partner: dict) -> list[str]:
+    
     terms = set()
     name = partner.get("name", "").strip()
+    
     if not name:
         return []
+    
     terms.add(name.lower())
     name_clean = re.sub(r'\s*\([^)]*\)', '', name).strip().lower()
+    
     if name_clean and name_clean != name.lower():
         terms.add(name_clean)
+        
     for m in re.finditer(r'\(([A-Za-z0-9][A-Za-z0-9\-]{2,15})\)', name):
         acronym = m.group(1)
         terms.add(acronym.lower())
         for part in acronym.split('-'):
             if len(part) >= 3:
                 terms.add(part.lower())
+                
     for alias in (partner.get("aliases") or []):
         if isinstance(alias, str) and len(alias.strip()) >= 3:
             terms.add(alias.strip().lower())
+            
     short = partner.get("short_name", "").strip()
+    
     if short and len(short) >= 3:
         terms.add(short.lower())
+        
     return [t for t in terms if t and len(t) >= 3]
 
 
 def _count_mentions(partner: dict, text_lower: str) -> int:
+    
     terms = _get_search_terms(partner)
+    
     if not terms:
         return 0
     return max(text_lower.count(t) for t in terms)
 
 
 def _find_first_page(partner: dict, pages: list[str]) -> int | None:
+    
     terms = _get_search_terms(partner)
+    
     for i, page_text in enumerate(pages):
         page_lower = page_text.lower()
         for term in terms:
             if term in page_lower:
-                return i + 1
+                return i + 1  
     return None
 
 
 def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
+    
     """
     For any partner with 0 mentions, scan the document for words
     from the partner name that appear 1-30 times likely short forms.
     Works for any language and any document.
     """
+    
     for partner in partners:
+        
         if partner.get("mention_count", 0) > 0:
             continue
+        
         name = partner.get("name", "").strip()
         name_clean = re.sub(r'\s*\([^)]*\)', '', name).strip().lower()
         words = name_clean.split()
         new_aliases = []
+        
         for word in words:
+            
             word_clean = re.sub(r'[^a-z]', '', word.lower())
+            
             if len(word_clean) < 5:
                 continue
+            
             count = text_lower.count(word_clean)
+            
             if 0 < count <= 30:
                 new_aliases.append(word_clean)
+                
         if new_aliases:
             existing = [a.lower() for a in (partner.get("aliases") or [])]
             for alias in new_aliases:
                 if alias not in existing:
                     partner["aliases"].append(alias)
+                    
         for m in re.finditer(r'\b([A-Z]{2,6})\b', name):
             word = m.group(1).lower()
             if len(word) >= 3 and word not in [a.lower() for a in (partner.get("aliases") or [])]:
@@ -136,11 +161,14 @@ def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
 
 
 def extract_partners(uploaded_file) -> list[dict]:
+   
     """
     Uses disk cache : LLM is only called once per unique document.
     """
+    
     os.makedirs(CACHE_DIR, exist_ok=True)
     uploaded_file.seek(0)
+    
     file_bytes = uploaded_file.read()
     file_hash = hashlib.md5(file_bytes).hexdigest()
     cache_path = os.path.join(CACHE_DIR, f"{file_hash}.json")
@@ -185,6 +213,7 @@ def extract_partners(uploaded_file) -> list[dict]:
 
     # Second pass: fix partners still at 0 mentions
     _fix_missing_aliases(partners, full_text_lower)
+    
     for partner in partners:
         if partner["mention_count"] == 0:
             partner["mention_count"] = _count_mentions(partner, full_text_lower)
@@ -206,8 +235,10 @@ def extract_partners(uploaded_file) -> list[dict]:
 
     # Final pass: replace short or missing evidence with best sentences from document
     for partner in partners:
+        
         evidence = partner.get("evidence") or []
         good = [e for e in evidence if len(e.split()) >= 8]
+        
         if good:
             partner["evidence"] = good
             continue
@@ -215,13 +246,16 @@ def extract_partners(uploaded_file) -> list[dict]:
         name = partner.get("name", "").strip()
         name_clean = re.sub(r'\s*\([^)]*\)', '', name).strip().lower()
         aliases = [a.lower() for a in (partner.get("aliases") or []) if len(a) >= 3]
+        
         for m in re.finditer(r'\(([A-Za-z0-9][A-Za-z0-9\-]{2,15})\)', name):
             aliases.append(m.group(1).lower())
+            
         terms = sorted(set([name.lower(), name_clean] + aliases), key=len, reverse=True)
         terms = [t for t in terms if len(t) >= 3]
 
         scored = []
         seen = set()
+        
         for s in all_sentences:
             s_lower = s.lower()
             norm = re.sub(r'[^a-z0-9]', '', s_lower)
@@ -232,6 +266,7 @@ def extract_partners(uploaded_file) -> list[dict]:
                     seen.add(norm)
                     scored.append((len(t), s))
                     break
+                
         scored.sort(key=lambda x: x[0], reverse=True)
         found = [s for _, s in scored[:3]]
 
@@ -257,10 +292,14 @@ def extract_partners(uploaded_file) -> list[dict]:
             partner["evidence"] = found
 
     partners.sort(key=lambda p: p["mention_count"], reverse=True)
+    
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(partners, f, ensure_ascii=False, indent=2)
+        
     meta_path = cache_path.replace(".json", ".meta.json")
+    
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump({"filename": uploaded_file.name}, f)
+        
     print(f"Cache saved: {cache_path} ({len(partners)} partners)")
     return partners

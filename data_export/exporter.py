@@ -12,6 +12,7 @@ import pandas as pd
 
 
 def export_to_excel(partners: list[dict]) -> bytes:
+    
     """
     Takes the list of partners.
     Returns the bytes of an Excel file ready for download.
@@ -39,6 +40,7 @@ def export_to_excel(partners: list[dict]) -> bytes:
                 len(set(p.get("category", "Other") for p in partners)),
             ],
         }
+        
         pd.DataFrame(summary_data).to_excel(writer, sheet_name="Summary", index=False)
 
         # ── Sheet 2: List of partners ──
@@ -70,6 +72,7 @@ def export_to_excel(partners: list[dict]) -> bytes:
                 .reset_index()
                 .sort_values("Count", ascending=False)
             )
+            
             by_category["Avg_Mentions"] = by_category["Avg_Mentions"].round(1)
             by_category.to_excel(writer, sheet_name="By Category", index=False)
 

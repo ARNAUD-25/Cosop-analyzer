@@ -13,6 +13,7 @@ from data_processing.extractor import extract_partners, CACHE_DIR
 from data_visualization.charts import chart_by_category, chart_by_mentions
 from data_export.exporter import export_to_excel
 from utils.validators import is_valid_pdf
+from data_processing.llm_client import _post_mistral
 
 st.set_page_config(
     page_title="PDF Partner Analyzer",
@@ -31,12 +32,18 @@ footer { visibility: hidden; }
 """, unsafe_allow_html=True)
 
 def get_cache_history():
+    
     if not os.path.exists(CACHE_DIR):
         return []
+    
     history = []
+    
     for fname in os.listdir(CACHE_DIR):
+        
         if fname.endswith(".json") and not fname.endswith(".meta.json"):
+            
             fpath = os.path.join(CACHE_DIR, fname)
+            
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -56,8 +63,10 @@ def get_cache_history():
                     "has_pages": os.path.exists(pages_path),
                     "cache_path": fpath,
                 })
+                
             except Exception:
                 pass
+            
     return sorted(history, key=lambda x: x["date"], reverse=True)[:5]
 
 
@@ -73,7 +82,9 @@ with st.sidebar:
         type=["pdf"],
         label_visibility="collapsed"
     )
+    
     history = get_cache_history()
+    
     if history:
         st.divider()
         st.markdown("**Recent documents**")
@@ -85,12 +96,15 @@ with st.sidebar:
             )
 
 # ── Session state ──
+
 if "partners" not in st.session_state:
     st.session_state.partners = []
+    
 if "pages" not in st.session_state:
     st.session_state.pages = []
 
 # ── Processing ──
+
 if uploaded_file:
     valid, error = is_valid_pdf(uploaded_file)
     if not valid:
@@ -119,6 +133,7 @@ if uploaded_file:
                 st.stop()
 
 # ── Dashboard ──
+
 partners = st.session_state.partners
 
 if partners:
@@ -242,6 +257,7 @@ if partners:
     with tab2:
         st.markdown("### Document Content")
         pages = st.session_state.pages
+        
         if uploaded_file:
             uploaded_file.seek(0)
             st.download_button(
@@ -251,12 +267,14 @@ if partners:
                 mime="application/pdf"
             )
             st.divider()
+            
         if pages:
             page_num = st.selectbox(
                 "Page",
                 options=list(range(1, len(pages) + 1)),
                 format_func=lambda x: f"Page {x} of {len(pages)}"
             )
+            
             st.text_area(
                 "",
                 value=pages[page_num - 1],
@@ -264,19 +282,23 @@ if partners:
                 label_visibility="collapsed"
             )
         else:
+            
             st.info("No pages available.")
 
     # ── Tab 3 : Summary ──
+    
     with tab3:
+        
         st.markdown("### AI-Generated Summary")
         st.caption("Summarises country context, strategic objectives, target groups and key interventions.")
 
         if "summary" not in st.session_state:
             if st.button("Generate summary"):
                 with st.spinner("Generating summary…"):
-                    from data_processing.llm_client import _post_mistral
+                    
                     api_key = os.environ.get("API_KEY")
                     full_text = " ".join(st.session_state.pages)
+                    
                     messages = [
                         {
                             "role": "system",
@@ -299,12 +321,14 @@ DOCUMENT:
 {full_text[:100000]}"""
                         }
                     ]
+                    
                     st.session_state.summary = _post_mistral(messages, api_key, max_tokens=1000)
 
         if "summary" in st.session_state:
             st.markdown(st.session_state.summary)
 
 else:
+    
     # ── Home ──
     st.markdown("# PDF Partner Analyzer")
     st.markdown("*Upload the PDF in the sidebar to extract and explore IFAD partner organisations.*")

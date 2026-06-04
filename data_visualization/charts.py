@@ -15,9 +15,10 @@ LAYOUT = dict(
     margin=dict(t=40, b=20, l=10, r=10),
 )
 
-
 def chart_by_category(partners: list[dict]):
+   
     """Donut chart: Category distribution"""
+    
     if not partners:
         st.info("No data to display.")
         return
@@ -58,12 +59,15 @@ def chart_by_category(partners: list[dict]):
 
 
 def chart_by_mentions(partners: list[dict]):
+    
     """Horizontal bar chart"""
+    
     if not partners:
         st.info("No data to display.")
         return
 
     df = pd.DataFrame(partners)
+    
     top = (
         df[df["mention_count"] > 0]
         .nlargest(len(df), "mention_count")[["name", "category", "mention_count"]]
