@@ -3,9 +3,9 @@ Calls the Mistral AI API to extract IFAD partner organisations.
 Model: mistral-small-latest
 
 Pipeline:
-  1. Chunk-by-chunk extraction (25 chunks, 8s delay between calls)
-  2. Name normalization using LLM (acronyms, variants, duplicates)
-  3. Merging and deduplication using fuzzy matching (85% threshold) and acronyms
+  1. Chunk-by-chunk extraction 
+  2. Name normalization using an LLM (acronyms, variants, duplicates)
+  3. Merge + fuzzy deduplication (threshold 85%) + acronym-based deduplication
 """
 
 import os
@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from rapidfuzz import fuzz, process
 
 load_dotenv()
+
 
 MISTRAL_URL   = "https://api.mistral.ai/v1/chat/completions"
 MISTRAL_MODEL = "mistral-small-latest"
@@ -55,7 +56,7 @@ def _post_mistral(messages: list[dict], api_key: str, max_tokens: int = 4000) ->
         r = requests.post(MISTRAL_URL, headers=headers, json=payload, timeout=60)
         if r.status_code == 429:
             wait = 30 * (attempt + 1)
-            print(f" Rate limit : waiting {wait}s (attempt {attempt+1}/4)")
+            print(f"  Rate limit -- waiting {wait}s (attempt {attempt+1}/4)")
             time.sleep(wait)
             continue
         r.raise_for_status()
@@ -67,19 +68,19 @@ def _call_mistral(chunk: str, i: int, total: int, api_key: str) -> list[dict]:
     messages = [
         {
             "role": "system",
-            "content": "Extract partner organisations from IFAD documents. The document may be written in any language (English, French, Spanish, Arabic, Indonesian, etc.). Read and understand the text regardless of its language, but always return results in English. Return valid JSON only."
+            "content": "You extract partner organisations from IFAD documents. Return valid JSON only. No markdown. No explanation."
         },
         {
             "role": "user",
             "content": f"""List ALL partner organisations in this IFAD COSOP text (part {i}/{total}).
 A partner is any real institution, ministry, agency, company or body that collaborates with IFAD.
-Be EXHAUSTIVE — include every organisation mentioned even once, including audit agencies (BPK, BPKP), bilateral agencies (JICA, GIZ, USAID, AFD, SNV), private sector (Mars Inc.).
-Exclude IFAD itself, laws, regulations, IFAD projects (YESS/TEKAD/READSI/UPLANDS/MAHFSA/SSTC/SMPEI/IMPLI/CoPLI/HDDAP/IPDMIP), journals, media, individual persons, frameworks or agreements (e.g. UNSDCF, Paris Agreement), roles or positions (e.g. Resident Coordinator), mechanisms or instruments (e.g. Reverse Linkage Mechanism), and organisations cited only as data sources.
+Be EXHAUSTIVE, include every organisation mentioned even once, including audit agencies (BPK, BPKP), bilateral agencies (JICA, GIZ, USAID, AFD, SNV), private sector (Mars Inc.).
+Exclude IFAD itself, laws, regulations, IFAD projects (YESS/TEKAD/READSI/UPLANDS/MAHFSA/SSTC/SMPEI/IMPLI/CoPLI/HDDAP/IPDMIP), journals, media, individual persons, frameworks or agreements (e.g. UNSDCF, Paris Agreement), roles or positions or offices (e.g. Resident Coordinator, UN Resident Coordinator, United Nations Resident Coordinator, Resident Coordinator Office, RCO) these are job titles or coordination mechanisms, not partner organisations, mechanisms or instruments (e.g. Reverse Linkage Mechanism), and organisations cited only as data sources.
 
 Return a JSON array of objects. Each object must have:
 - "name": full official name (expand acronyms: MoF->Ministry of Finance, ADB->Asian Development Bank, WFP->World Food Programme, GIZ->Deutsche Gesellschaft fuer Internationale Zusammenarbeit, MoV->Ministry of Villages Development of Disadvantaged Regions and Transmigration, MoEF->Ministry of Environment and Forestry, MoA->Ministry of Agriculture, OJK->Indonesia Financial Services Authority, etc.)
 - "aliases": list of ALL short forms, acronyms, and alternative names used in this text for this organisation.
-  Be thorough — include:
+  Be thorough, include:
   * Official acronyms: ADB, WFP, OJK, GIZ, JICA, USAID, FAO, UNDP, etc.
   * Informal short names: "World Bank", "the Bank", "Netherlands", "UK", "Danish", "Norwegian"
   * Local language names: "Bappenas", "Kemendagri", "MoEF", "MoA", "MoV", "MoF", "KUKM"
@@ -93,7 +94,7 @@ Return a JSON array of objects. Each object must have:
 - "roles": list of strings
 - "sectors": list of strings
 - "description": one sentence string
-- "evidence": list of 1-2 short quotes from the text that mention this organisation in a partnership context (phrases containing words like "partnership", "cooperation", "collaboration", "potential", "agreement", "co-financing", "working with")
+- "evidence": list of 2 to 3 short quotes from the text that mention this organisation in a partnership context (phrases containing words like "partnership", "cooperation", "collaboration", "potential", "agreement", "co-financing", "working with")
 
 Return [] if no partners found.
 
@@ -103,7 +104,7 @@ TEXT:
     ]
     raw = _post_mistral(messages, api_key, max_tokens=4000)
     partners = parse_json_from_llm(raw)
-    print(f" {len(partners)} partner(s) : chunk {i}/{total}")
+    print(f"  {len(partners)} partner(s) -- chunk {i}/{total}")
     return partners
 
 
@@ -112,7 +113,7 @@ def _normalize_names_with_llm(raw_names: list[str], api_key: str) -> dict[str, s
         return {}
     names_list = "\n".join(f"- {n}" for n in raw_names)
     messages = [
-        {"role": "system", "content": "An expert in international development organisations. Respond with valid JSON only."},
+        {"role": "system", "content": "You are an expert in international development organisations. Respond with valid JSON only."},
         {"role": "user", "content": f"""Normalise these organisation names from an IFAD COSOP document.
 Return ONLY a JSON object: keys=original names (case-sensitive), values=canonical full names.
 
@@ -140,7 +141,7 @@ NAMES:
             if isinstance(parsed, dict):
                 return {str(k).lower().strip(): str(v) for k, v in parsed.items() if isinstance(k, str) and isinstance(v, str)}
     except Exception as e:
-        print(f" Normalisation error: {e}")
+        print(f"  Normalisation error: {e}")
     return {}
 
 
@@ -157,7 +158,8 @@ def _extract_acronym(name: str) -> str:
 
 def _enrich_evidence(partner: dict, full_text: str) -> list[str]:
     """
-    Searches the document for sentences mentioning the partner and returns them exactly as in the text; short evidence (<5 words) is replaced with full sentences.
+    Searches the full document text for sentences mentioning this partner.
+    Returns sentences exactly as they appear in the document.
     """
     existing = [e for e in (partner.get("evidence") or []) if len(e.split()) >= 5]
     name = partner.get("name", "").strip().lower()
@@ -292,7 +294,7 @@ def ask_llm(document_text: str) -> list[dict]:
 
     print(f"Normalising {len(all_raw_names)} names...")
     name_mapping = _normalize_names_with_llm(all_raw_names, api_key)
-    print(f" {len(name_mapping)} mappings found")
+    print(f"  -> {len(name_mapping)} mappings found")
 
     final = _merge_partners(all_results, name_mapping)
 
@@ -301,7 +303,7 @@ def ask_llm(document_text: str) -> list[dict]:
     for partner in final:
         partner["evidence"] = _enrich_evidence(partner, document_text)
 
-    print(f"Total: {len(final)} unique partners")
+    print(f"Total: {len(final)} partners")
     return final
 
 

@@ -1,3 +1,9 @@
+"""
+1. Read the PDF
+2. Call the LLM (or return from disk cache)
+3. Filters non-specific extracted entities and enriches them with mentions, first-page occurrence, and supporting evidence.
+4. Save to disk cache
+"""
 import io
 import re
 import hashlib
@@ -9,6 +15,50 @@ from .llm_client import ask_llm
 
 CACHE_DIR = ".cosop_cache"
 EXCLUDE_NAMES = ["ifad", "international fund for agricultural development"]
+
+
+def _is_generic(name: str) -> bool:
+    """
+    Detects non-specific category names using universal linguistic patterns.
+    """
+    n = name.lower().strip()
+    name_no_parens = re.sub(r'\s*\([^)]*\)', '', n).strip()
+
+    generic_endings = (
+        "enterprises", "organizations", "organisations",
+        "associations", "companies", "institutions",
+        "governments", "stakeholders", "actors", "entities",
+        "banks", "funds", "bodies",
+    )
+    generic_starts = (
+        "local ", "provincial ", "regional ", "national and local",
+        "village-owned", "community-based", "civil society",
+        "private sector", "commercial ", "youth ",
+    )
+    semantic_patterns = (
+        "village-owned", "bum desa", "bumdes",
+        "resident coordinator",
+    )
+
+    # Pattern: "X at national/local/regional level"
+    if "at national" in n or "at local" in n or "at regional" in n:
+        return True
+
+    # Ends with a broad plural noun representing a category rather than a specific entity.
+    if any(n.endswith(e) for e in generic_endings) and " at " in n:
+        return True
+
+    # Starts with a general adjective that does not refer to a specific entity.
+    if any(n.startswith(s) for s in generic_starts):
+        return True
+    if any(name_no_parens.startswith(s) for s in generic_starts):
+        return True
+
+    # Semantic patterns regardless of exact wording
+    if any(p in n for p in semantic_patterns):
+        return True
+
+    return False
 
 
 def _get_search_terms(partner: dict) -> list[str]:
@@ -53,6 +103,11 @@ def _find_first_page(partner: dict, pages: list[str]) -> int | None:
 
 
 def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
+    """
+    For any partner with 0 mentions, scan the document for words
+    from the partner name that appear 1-30 times likely short forms.
+    Works for any language and any document.
+    """
     for partner in partners:
         if partner.get("mention_count", 0) > 0:
             continue
@@ -62,7 +117,7 @@ def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
         new_aliases = []
         for word in words:
             word_clean = re.sub(r'[^a-z]', '', word.lower())
-            if len(word_clean) < 4:
+            if len(word_clean) < 5:
                 continue
             count = text_lower.count(word_clean)
             if 0 < count <= 30:
@@ -80,33 +135,42 @@ def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
 
 
 def extract_partners(uploaded_file) -> list[dict]:
+    """
+    Uses disk cache : LLM is only called once per unique document.
+    """
     os.makedirs(CACHE_DIR, exist_ok=True)
     uploaded_file.seek(0)
     file_bytes = uploaded_file.read()
     file_hash = hashlib.md5(file_bytes).hexdigest()
     cache_path = os.path.join(CACHE_DIR, f"{file_hash}.json")
+
     if os.path.exists(cache_path):
-        print(f"Cache hit: {cache_path}")
         with open(cache_path, "r", encoding="utf-8") as f:
             return json.load(f)
-    print(f"Cache miss: {cache_path} — calling LLM...")
+
     full_text = read_pdf(io.BytesIO(file_bytes))
     reader = pypdf.PdfReader(io.BytesIO(file_bytes))
     pages = [page.extract_text() or "" for page in reader.pages]
     partners = ask_llm(full_text)
+
+    # Removes IFAD itself, overly general references that do not refer to a specific organization,
+    # as well as entries flagged by the LLM as non-specific.    
     partners = [
         p for p in partners
         if not any(ex in p.get("name", "").lower() for ex in EXCLUDE_NAMES)
+        and p.get("is_specific", True)
+        and not _is_generic(p.get("name", ""))
     ]
 
     # Clean up names
     for partner in partners:
         partner["name"] = re.sub(r'\s+GmbH\b', '', partner["name"]).strip()
-        partner["name"] = re.sub(r'\s+\(Indonesia\)', '', partner["name"], flags=re.IGNORECASE).strip()
+        partner["name"] = re.sub(r',?\s+of the Republic of \w+\b', '', partner["name"]).strip()
+        partner["name"] = re.sub(r'\s+of \w+ Republic\b', '', partner["name"]).strip()
 
     full_text_lower = full_text.lower()
 
-    # First pass
+    # First pass: enrich with mentions, first page, defaults
     for partner in partners:
         partner["mention_count"] = _count_mentions(partner, full_text_lower)
         partner["first_page"] = _find_first_page(partner, pages)
@@ -118,7 +182,7 @@ def extract_partners(uploaded_file) -> list[dict]:
         partner.setdefault("evidence", [])
         partner.setdefault("aliases", [])
 
-    # Second pass: fix 0 mentions
+    # Second pass: fix partners still at 0 mentions
     _fix_missing_aliases(partners, full_text_lower)
     for partner in partners:
         if partner["mention_count"] == 0:
@@ -126,7 +190,7 @@ def extract_partners(uploaded_file) -> list[dict]:
             if partner["first_page"] is None:
                 partner["first_page"] = _find_first_page(partner, pages)
 
-    # Build clean sentence list for evidence
+    # Build sentence and line lists for evidence enrichment
     clean_text = re.sub(r'[\uf0b7\uf0a7\uf020\u2022\u25cf\u2013\u2014]', ' ', full_text)
     clean_text = re.sub(r'\s+', ' ', clean_text)
     all_sentences = re.split(r'(?<=[.!?])\s+', clean_text)
@@ -197,10 +261,5 @@ def extract_partners(uploaded_file) -> list[dict]:
     meta_path = cache_path.replace(".json", ".meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump({"filename": uploaded_file.name}, f)
-
-    # Save pages text for Document Content tab
-    pages_path = cache_path.replace(".json", ".pages.json")
-    with open(pages_path, "w", encoding="utf-8") as f:
-        json.dump(pages, f, ensure_ascii=False)
     print(f"Cache saved: {cache_path} ({len(partners)} partners)")
     return partners

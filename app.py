@@ -30,7 +30,6 @@ footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
-
 def get_cache_history():
     if not os.path.exists(CACHE_DIR):
         return []
@@ -294,7 +293,7 @@ Include the following sections:
 5. Main interventions and projects
 6. Key partnerships
 
-Be concise, with a maximum of 500 words.
+Be concise, with a maximum of 300 words.
 
 DOCUMENT:
 {full_text[:100000]}"""
@@ -308,7 +307,7 @@ DOCUMENT:
 else:
     # ── Home ──
     st.markdown("# PDF Partner Analyzer")
-    st.markdown("*Upload a PDF in the sidebar to extract and explore IFAD partner organisations.*")
+    st.markdown("*Upload the PDF in the sidebar to extract and explore IFAD partner organisations.*")
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
@@ -326,14 +325,14 @@ else:
         - Filter partners by category and number of mentions
         - Click any partner to view its roles, sectors, description, and additional details
         - Read the document page by page
-        - Generate an AI summary of the COSOP
+        - Generate an AI summary of the COSOP PDF
         - Export all results to Excel
         """)
     st.divider()
     st.markdown("**AI Model**")
     st.info(
-        "This app uses **Mistral Small** (`mistral-small-latest`), an open-source Large Language Model (LLM) "
-        "developed by Mistral AI and available on Hugging Face. "
-        "The model analyses COSOP documents to automatically identify, classify, and extract partner organisations. "
-        "Each partner is assigned a status (Active, Potential, or Inactive) based on the context in which it appears in the document. "
+        "This app uses **Mistral Small** (`mistral-small-latest`), a large language model (LLM) "
+        "developed by Mistral AI. The model is pretrained and available as open source on Hugging Face. "
+        "It analyzes the COSOP PDF to automatically identify, categorize, and extract partner organizations. "
+        "Each partner is assigned a status (Active / Potential / Inactive) based on the context in which it appears in the document."
     )
