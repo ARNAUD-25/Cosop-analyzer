@@ -18,6 +18,7 @@ EXCLUDE_NAMES = ["ifad", "international fund for agricultural development"]
 
 
 def _is_generic(name: str) -> bool:
+    
     """
     Detects non-specific category names using universal linguistic patterns.
     """
@@ -39,27 +40,28 @@ def _is_generic(name: str) -> bool:
         "village-owned", "bum desa", "bumdes",
         "resident coordinator",
         "business partners",
+        "reverse linkage",
     )
 
     # Pattern: "X at national/local/regional level"
     if "at national" in n or "at local" in n or "at regional" in n:
         return True
-
+    
     # Ends with a broad plural noun representing a category rather than a specific entity.
     if any(n.endswith(e) for e in generic_endings) and " at " in n:
         return True
-
+    
     # Starts with a general adjective that does not refer to a specific entity.
     if any(n.startswith(s) for s in generic_starts):
         return True
     
     if any(name_no_parens.startswith(s) for s in generic_starts):
         return True
-
+    
     # Semantic patterns regardless of exact wording
     if any(p in n for p in semantic_patterns):
         return True
-
+    
     return False
 
 
@@ -108,12 +110,11 @@ def _count_mentions(partner: dict, text_lower: str) -> int:
 def _find_first_page(partner: dict, pages: list[str]) -> int | None:
     
     terms = _get_search_terms(partner)
-    
     for i, page_text in enumerate(pages):
         page_lower = page_text.lower()
         for term in terms:
             if term in page_lower:
-                return i + 1  
+                return i + 1
     return None
 
 
@@ -133,17 +134,13 @@ def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
         name = partner.get("name", "").strip()
         name_clean = re.sub(r'\s*\([^)]*\)', '', name).strip().lower()
         words = name_clean.split()
-        new_aliases = []
         
+        new_aliases = []
         for word in words:
-            
             word_clean = re.sub(r'[^a-z]', '', word.lower())
-            
             if len(word_clean) < 5:
                 continue
-            
             count = text_lower.count(word_clean)
-            
             if 0 < count <= 30:
                 new_aliases.append(word_clean)
                 
@@ -161,14 +158,13 @@ def _fix_missing_aliases(partners: list[dict], text_lower: str) -> None:
 
 
 def extract_partners(uploaded_file) -> list[dict]:
-   
+    
     """
     Uses disk cache : LLM is only called once per unique document.
     """
     
     os.makedirs(CACHE_DIR, exist_ok=True)
     uploaded_file.seek(0)
-    
     file_bytes = uploaded_file.read()
     file_hash = hashlib.md5(file_bytes).hexdigest()
     cache_path = os.path.join(CACHE_DIR, f"{file_hash}.json")
@@ -183,7 +179,7 @@ def extract_partners(uploaded_file) -> list[dict]:
     partners = ask_llm(full_text)
 
     # Removes IFAD itself, overly general references that do not refer to a specific organization,
-    # as well as entries flagged by the LLM as non-specific.    
+    # as well as entries flagged by the LLM as non-specific. 
     partners = [
         p for p in partners
         if not any(ex in p.get("name", "").lower() for ex in EXCLUDE_NAMES)
@@ -196,10 +192,12 @@ def extract_partners(uploaded_file) -> list[dict]:
         partner["name"] = re.sub(r'\s+GmbH\b', '', partner["name"]).strip()
         partner["name"] = re.sub(r',?\s+of the Republic of \w+\b', '', partner["name"]).strip()
         partner["name"] = re.sub(r'\s+of \w+ Republic\b', '', partner["name"]).strip()
+        partner["name"] = re.sub(r'\s*\(Indonesia\)', '', partner["name"]).strip()
+        partner["name"] = re.sub(r',?\s+"Indonesia"', '', partner["name"]).strip()
 
     full_text_lower = full_text.lower()
 
-    # First pass: enrich with mentions, first page, defaults
+    # First pass: enrich with mentions, first page,..
     for partner in partners:
         partner["mention_count"] = _count_mentions(partner, full_text_lower)
         partner["first_page"] = _find_first_page(partner, pages)
@@ -213,14 +211,12 @@ def extract_partners(uploaded_file) -> list[dict]:
 
     # Second pass: fix partners still at 0 mentions
     _fix_missing_aliases(partners, full_text_lower)
-    
     for partner in partners:
         if partner["mention_count"] == 0:
             partner["mention_count"] = _count_mentions(partner, full_text_lower)
             if partner["first_page"] is None:
                 partner["first_page"] = _find_first_page(partner, pages)
 
-    # Build sentence and line lists for evidence enrichment
     clean_text = re.sub(r'[\uf0b7\uf0a7\uf020\u2022\u25cf\u2013\u2014]', ' ', full_text)
     clean_text = re.sub(r'\s+', ' ', clean_text)
     all_sentences = re.split(r'(?<=[.!?])\s+', clean_text)
@@ -235,10 +231,8 @@ def extract_partners(uploaded_file) -> list[dict]:
 
     # Final pass: replace short or missing evidence with best sentences from document
     for partner in partners:
-        
         evidence = partner.get("evidence") or []
         good = [e for e in evidence if len(e.split()) >= 8]
-        
         if good:
             partner["evidence"] = good
             continue
@@ -246,16 +240,13 @@ def extract_partners(uploaded_file) -> list[dict]:
         name = partner.get("name", "").strip()
         name_clean = re.sub(r'\s*\([^)]*\)', '', name).strip().lower()
         aliases = [a.lower() for a in (partner.get("aliases") or []) if len(a) >= 3]
-        
         for m in re.finditer(r'\(([A-Za-z0-9][A-Za-z0-9\-]{2,15})\)', name):
             aliases.append(m.group(1).lower())
-            
         terms = sorted(set([name.lower(), name_clean] + aliases), key=len, reverse=True)
         terms = [t for t in terms if len(t) >= 3]
 
         scored = []
         seen = set()
-        
         for s in all_sentences:
             s_lower = s.lower()
             norm = re.sub(r'[^a-z0-9]', '', s_lower)
