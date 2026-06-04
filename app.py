@@ -149,7 +149,7 @@ if partners:
 
         st.divider()
 
-        # Graphics
+        # Charts
         st.markdown("### Charts")
         col_pie, col_bar = st.columns(2, gap="large")
         with col_pie:

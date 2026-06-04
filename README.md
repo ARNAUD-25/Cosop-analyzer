@@ -1,4 +1,4 @@
-# COSOP Partner Analyzer
+# PDF Partner Analyzer
 
 Interactive dashboard to extract and visualize IFAD partner organisations from COSOP documents using AI.
 
@@ -55,9 +55,9 @@ Opens automatically on **http://localhost:8501**
 ## Project structure
 
 ```
-cosop-analyzer/
+Cosop-analyzer/
 │
-├── app.py                        [ Streamlit (entry point) ]
+├── app.py                        [ Streamlit ]
 │
 ├── data_processing/
 │   ├── pdf_reader.py             [ Reads PDF text ]

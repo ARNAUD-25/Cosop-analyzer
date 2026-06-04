@@ -1,7 +1,7 @@
 """
 Exports to an Excel file (.xlsx)
 
-3 sheets:
+With 3 sheets:
   1. Summary      
   2. Partner List 
   3. By Category 

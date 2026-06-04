@@ -2,10 +2,9 @@
 Calls the Mistral AI API to extract IFAD partner organisations.
 Model: mistral-small-latest
 
-Pipeline:
-  1. Chunk-by-chunk extraction 
-  2. Name normalization using an LLM (acronyms, variants, duplicates)
-  3. Merge + fuzzy deduplication (threshold 85%) + acronym-based deduplication
+1. Chunk-by-chunk extraction 
+2. Name normalization using an LLM (acronyms, variants, duplicates)
+3. Merge + fuzzy deduplication (threshold 85%) + acronym-based deduplication
 """
 
 import os
