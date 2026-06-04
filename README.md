@@ -35,11 +35,11 @@ cp .env.example .env
 
 # Replace YOUR_ACTUAL_KEY with your key from https://console.mistral.ai/api-keys
 
-sed -i "" "s/your_mistral_api_key_here/YOUR_ACTUAL_KEY/" .env # (macOS) 
+sed -i "" "s/your_mistral_api_key_here/YOUR_ACTUAL_KEY/" .env     # For macOS 
 
-sed -i "s/your_mistral_api_key_here/YOUR_ACTUAL_KEY/" .env # (Linux)
+sed -i "s/your_mistral_api_key_here/YOUR_ACTUAL_KEY/" .env        # For Linux
 
-#[If key contains characters like / or &, this can break sed. Safer version : sed -i "" "s|your_mistral_api_key_here|YOUR_ACTUAL_KEY|" .env (using | instead of /)]
+#[ If key contains characters like / or &, this can break sed. Safer version : sed -i "" "s|your_mistral_api_key_here|YOUR_ACTUAL_KEY|" .env (using | instead of /) ]
 
 # 5. Run the application
 
