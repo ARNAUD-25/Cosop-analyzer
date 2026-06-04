@@ -12,6 +12,7 @@ MAX_SIZE_MB = 500
 
 
 def is_valid_pdf(uploaded_file) -> tuple[bool, str]:
+    
     """
     Returns (True, "")           if the file is valid.
     Returns (False, "message")   if the file is invalid.
