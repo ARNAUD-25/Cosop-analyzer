@@ -66,7 +66,8 @@ Opens automatically on **http://localhost:8501**
 ```
 Cosop-analyzer/
 │
-├── app.py                        [ Streamlit ]
+├── app.py                        [ Streamlit UI (entry point) ]
+├── config.py                     [ Central configuration ]
 │
 ├── data_processing/
 │   ├── pdf_reader.py             [ Reads PDF text ]
