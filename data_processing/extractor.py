@@ -12,10 +12,9 @@ import os
 import pypdf
 from .pdf_reader import read_pdf
 from .llm_client import ask_llm
+from config import CACHE_DIR, MAX_EVIDENCE, MIN_EVIDENCE_WORDS
 
-CACHE_DIR = ".cosop_cache"
 EXCLUDE_NAMES = ["ifad", "international fund for agricultural development"]
-
 
 def _is_generic(name: str) -> bool:
     
@@ -232,7 +231,7 @@ def extract_partners(uploaded_file) -> list[dict]:
     # Final pass: replace short or missing evidence with best sentences from document
     for partner in partners:
         evidence = partner.get("evidence") or []
-        good = [e for e in evidence if len(e.split()) >= 8]
+        good = [e for e in evidence if len(e.split()) >= MIN_EVIDENCE_WORDS]
         if good:
             partner["evidence"] = good
             continue
@@ -259,7 +258,7 @@ def extract_partners(uploaded_file) -> list[dict]:
                     break
                 
         scored.sort(key=lambda x: x[0], reverse=True)
-        found = [s for _, s in scored[:3]]
+        found = [s for _, s in scored[:MAX_EVIDENCE]]
 
         if not found:
             for idx, line in enumerate(raw_lines):

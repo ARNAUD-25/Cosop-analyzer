@@ -276,7 +276,7 @@ if partners:
             )
             
             st.text_area(
-                "",
+                "Page content",
                 value=pages[page_num - 1],
                 height=500,
                 label_visibility="collapsed"

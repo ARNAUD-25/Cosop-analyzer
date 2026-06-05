@@ -15,13 +15,11 @@ import requests
 
 from dotenv import load_dotenv
 from rapidfuzz import fuzz, process
+from config import MISTRAL_URL, MISTRAL_MODEL, CHUNK_SIZE, SLEEP_BETWEEN_CHUNKS, RANDOM_SEED, FUZZY_THRESHOLD
 
 load_dotenv()
 
 
-MISTRAL_URL   = "https://api.mistral.ai/v1/chat/completions"
-MISTRAL_MODEL = "mistral-small-latest"
-CHUNK_SIZE    = 12000
 
 # Keywords indicating a partnership mention
 PARTNERSHIP_KEYWORDS = [
@@ -54,7 +52,7 @@ def _split_into_chunks(text: str) -> list[str]:
 def _post_mistral(messages: list[dict], api_key: str, max_tokens: int = 4000) -> str:
     
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"model": MISTRAL_MODEL, "messages": messages, "temperature": 0, "max_tokens": max_tokens}
+    payload = {"model": MISTRAL_MODEL, "messages": messages, "temperature": 0, "max_tokens": max_tokens, "random_seed": RANDOM_SEED}
     
     for attempt in range(4):
         
@@ -254,7 +252,7 @@ def _merge_partners(all_lists: list[list[dict]], name_mapping: dict[str, str]) -
             
             if existing_keys:
                 result = process.extractOne(key, existing_keys, scorer=fuzz.token_sort_ratio)
-                if result and result[1] >= 85:
+                if result and result[1] >= FUZZY_THRESHOLD:
                     key = result[0]
 
             if key not in merged:
@@ -304,7 +302,7 @@ def ask_llm(document_text: str) -> list[dict]:
             empty_chunks.append((i, chunk))
         finally:
             if i < total:
-                time.sleep(8)
+                time.sleep(SLEEP_BETWEEN_CHUNKS)
 
     # Retry chunks that returned 0 partners
     if empty_chunks:
@@ -319,7 +317,7 @@ def ask_llm(document_text: str) -> list[dict]:
             except Exception as e:
                 print(f" Error retry chunk {i}: {e}")
             finally:
-                time.sleep(8)
+                time.sleep(SLEEP_BETWEEN_CHUNKS)
 
     if not all_results:
         return []
