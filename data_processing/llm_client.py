@@ -21,7 +21,7 @@ load_dotenv()
 
 MISTRAL_URL   = "https://api.mistral.ai/v1/chat/completions"
 MISTRAL_MODEL = "mistral-small-latest"
-CHUNK_SIZE    = 12000
+CHUNK_SIZE    = 15000
 
 # Keywords indicating a partnership mention
 PARTNERSHIP_KEYWORDS = [
