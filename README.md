@@ -55,7 +55,6 @@ sed -i "s/your_mistral_api_key_here/YOUR_ACTUAL_KEY/" .env        # For Linux
 
 python -m streamlit run app.py
 ```
-
 Opens automatically on **http://localhost:8501**
 
 ## Environment variables
