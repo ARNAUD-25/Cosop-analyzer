@@ -66,7 +66,7 @@ Opens automatically on **http://localhost:8501**
 ```
 Cosop-analyzer/
 │
-├── app.py                        [ Streamlit UI (entry point) ]
+├── app.py                        [ Streamlit ]
 ├── config.py                     [ Central configuration ]
 │
 ├── data_processing/
