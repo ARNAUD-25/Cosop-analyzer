@@ -1,5 +1,5 @@
-numpy>=2.4.6
-pyarrow>=17.0.0 
+numpy<2
+pyarrow>=14.0.0
 streamlit>=1.28.0
 pypdf>=3.0.0
 pandas>=2.0.0
