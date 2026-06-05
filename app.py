@@ -355,8 +355,9 @@ else:
     st.divider()
     st.markdown("**AI Model**")
     st.info(
-        "This app uses **Mistral Small** (`mistral-small-latest`), a large language model (LLM) "
-        "developed by Mistral AI. The model is pretrained and available as open source on Hugging Face. "
-        "It analyzes the COSOP PDF to automatically identify, categorize, and extract partner organizations. "
-        "Each partner is assigned a status (Active / Potential / Inactive) based on the context in which it appears in the document."
+        "This app uses **Mistral Small** (`mistral-small-latest`), a Large Language Model (LLM) "
+        "developed by Mistral AI and accessed through its API. "
+        "Mistral AI also publishes open source models on Hugging Face. "
+        "The model is prompted to analyse COSOP documents and identify, classify and extract partner organisations. "
+        "Each partner is assigned a status based on the context in which it appears in the document."
     )
